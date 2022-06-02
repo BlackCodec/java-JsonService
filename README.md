@@ -17,3 +17,8 @@ Is supposed that all input string are JsonObjects but the parser works also with
 
     This is the very first release.
 
+---
+### License: 
+
+**GPL v3.0**, see file license.txt
+
