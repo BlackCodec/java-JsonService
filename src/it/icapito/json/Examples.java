@@ -1,11 +1,41 @@
 package it.icapito.json;
 
 import java.util.Map;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import java.util.logging.SimpleFormatter;
+import java.util.logging.LogRecord;
+import java.util.logging.ConsoleHandler;
+import java.util.logging.Handler;
 
 import it.icapito.json.JsonService.*;
 
 public class Examples {
+	
+	// change this value to true to append standard java console logger to json service in verbose mode 
+	public static final boolean ENABLE_LOGGER = false;
+	
 	public static void main(String[] args) {
+		if (ENABLE_LOGGER) {
+			// Create formatter for log output
+			SimpleFormatter formatter = new SimpleFormatter() {
+					private static final String FORMAT = "<%s> [%s] %s.%s(): %s %n";
+					@Override
+					public synchronized String format(LogRecord logRecord) {
+						return String.format(FORMAT,new java.util.Date(),logRecord.getLevel().getName(),
+								logRecord.getSourceClassName(), logRecord.getSourceMethodName(),
+								logRecord.getMessage());
+					}
+			};
+			// create a new instance of logger
+			Logger logger = Logger.getLogger("Example");
+			logger.setLevel(Level.FINEST);
+			Handler consoleHandler = new ConsoleHandler();
+			consoleHandler.setLevel(Level.FINEST);
+			consoleHandler.setFormatter(formatter);
+			logger.addHandler(consoleHandler);
+			JsonService.appendLogger(logger);
+		}
 		System.out.println("*** Example 1 *** \nConvert a string to JsonObject\n\n");
 		testOne();
 		System.out.println("\n\n*** Example 2 *** \nBuild a JsonObject and convert to string\n\n");
@@ -14,7 +44,9 @@ public class Examples {
 		testThree();
 	}
 	
-	public static void testOne() {
+	private static final String ELEMENT_FORMAT = "- %s => (%s) %s";
+	
+	private static void testOne() {
 		String jsonString = "{\n"
 				+ "  \"key1\": \"value as string\",\n"
 				+ "  \"key2\": \"second string\",\n"
@@ -29,68 +61,64 @@ public class Examples {
 				+ "    \"key9\": \"false\",\n"
 				+ "\"key7\": 2.0,\n"
 				+ "\"key8\": [ {\"sk1\":\"sv1\",\"sk2\":1.0, \"sk3\": false},"
-				+ "{\"sk1\":\"sv2\",\"sk2\":1.2, \"sk3\": \"true\"}]"
+				+ "{\"sk1\":\"sv2\",\"sk2\":1.2, \"sk3\": \"true\"}], \"keynum\" : 100"
 				+ "}";
-		JsonObject parsed = (JsonObject) JsonService.parseString(jsonString, 0);
-		if (parsed != null && parsed.getType() != JsonElementType.JSON_NULL) {
-			for (Map.Entry<String, JsonElement> r: parsed.entrySet())
-				System.out.println(r.getKey() + " ("+r.getValue().getType()+") => " + r.getValue().getValueAsString());
-			System.out.println("\n* Get key5 * \n");
-			JsonArray x = (JsonArray) parsed.getValue("key5");
-			for (JsonElement e: x.values()) 
-				System.out.println("\t"+e.getType() + " : " + e.getValueAsString());
-			System.out.println("\n* Get key8 * \n");
-			x = (JsonArray) parsed.getValue("key8");
-			for (JsonElement e: x.values()) {
-				System.out.println("\t"+e.getType() + " : " + e.getValueAsString());
-				JsonObject z = (JsonObject) e;
-				for (Map.Entry<String, JsonElement> r: z.entrySet())
-					System.out.println("\t\t"+r.getKey() + " ("+r.getValue().getType()+") => " + r.getValue().getValueAsString());
-			}
+		System.out.println("Json string:\n" + jsonString);
+		JsonObject parsed = JsonService.parse(jsonString);
+		for (Map.Entry<String, JsonElement> r: parsed.childs().entrySet())
+				System.out.println(String.format(ELEMENT_FORMAT, r.getKey(),r.getValue().type().name(), r.getValue().value()));
+		System.out.println("\n* Get key5 * \n");
+		JsonArray x = (JsonArray) parsed.get("key5");
+		for (JsonElement e: x.childs()) 
+			System.out.println("\t"+e.type().name() + " : " + e.value());
+		System.out.println("\n* Get key8 * \n");
+		x = (JsonArray) parsed.get("key8");
+		for (JsonElement e: x.childs()) {
+			System.out.println("\t"+e.type().name() + " : " + e.value());
+		JsonObject z = (JsonObject) e;
+		for (Map.Entry<String, JsonElement> r: z.childs().entrySet())
+			System.out.println("\t\t"+String.format(ELEMENT_FORMAT, r.getKey(),r.getValue().type().name(),r.getValue().value()));
 		}
 	}
 	
 	public static void testTwo() {
 		JsonObject root = new JsonObject();
 		JsonObject obj = new JsonObject();
-		obj.addString("key1", "value1");
-		obj.addBoolean("key2", false);
-		obj.addNumber("key3", "2.1");
-		root.addJsonObject("root1", obj);
+		obj.add("key1", new JsonElement(JsonElement.Types.JSON_STRING, "value1"));
+		obj.add("key2", new JsonElement(JsonElement.Types.JSON_BOOLEAN,"false"));
+		obj.add("key3", new JsonElement(JsonElement.Types.JSON_NUMBER,"2.1"));
+		root.add("root1", obj);
 		obj = new JsonObject();
-		obj.addString("key1", "value2");
-		obj.addBoolean("key2", "true");
-		obj.addInteger("key3", 31);
-		root.addJsonObject("root2", obj);
-		root.addString("root3","this is a test string with \\\"escapes\\\"");
+		obj.add("key1", new JsonElement(JsonElement.Types.JSON_STRING,"value2"));
+		obj.add("key2", new JsonElement(JsonElement.Types.JSON_BOOLEAN,"true"));
+		obj.add("key3", new JsonElement(JsonElement.Types.JSON_NUMBER,"31"));
+		root.add("root2", obj);
+		root.add("root3",new JsonElement(JsonElement.Types.JSON_STRING,"this is a test string with \\\"escapes\\\""));
 		JsonArray array = new JsonArray();
-		JsonElement record = new JsonElement(JsonElementType.JSON_NUMBER);
-		record.setValue("1.1");
-		array.addRecord(record);
-		record.setValue("2.1");
-		array.addRecord(record);
-		record.setValue("2.2");
-		array.addRecord(record);
-		record.setValue("1.4");
-		array.addRecord(record);
-		root.addJsonArray("root4", array);
-		array.clear();
-		array.addString("av1 with escapes\\\"");
-		array.addInteger(55);
-		array.addBoolean(false);
-		array.addBoolean("true");
-		root.addJsonArray("root4", array);
-		System.out.println("Root:\n" + root.getValueAsString());
+		JsonElement record = new JsonElement(JsonElement.Types.JSON_NUMBER,"1.1");
+		array.add(record);
+		array.add(new JsonElement(JsonElement.Types.JSON_NUMBER,"2.1"));
+		array.add(new JsonElement(JsonElement.Types.JSON_NUMBER,"2.2"));
+		array.add(new JsonElement(JsonElement.Types.JSON_NUMBER,"1.4"));
+		root.add("root4", array);
+		array = new JsonArray();
+		array.add(new JsonElement(JsonElement.Types.JSON_STRING,"av1 with escapes\\\""));
+		array.add(new JsonElement(JsonElement.Types.JSON_NUMBER,"55"));
+		array.add(new JsonElement(JsonElement.Types.JSON_BOOLEAN,"false"));
+		root.add("root4", array);
+		System.out.println("Root:\n" + root.toString());
 	}
 	
 	public static void testThree() {
-		String jsonString = "[ \"a\",\"b\",\n"
-				+ "   \"c\",\"d\"]";
-		JsonArray parsed = (JsonArray) JsonService.parseString(jsonString, 0);
-		if (parsed != null && parsed.getType() != JsonElementType.JSON_NULL) {
-			System.out.println(parsed.getValueAsString());
-			for (JsonElement e: parsed.values())
-				System.out.println(e.getType() + " : " + e.getValueAsString());
+		String jsonString = "{ \"elements\": [ \"a\",\"b\",\n"
+				+ "   \"c\",\"d\"] }";
+		System.out.println("Source json: " + jsonString);
+		JsonArray parsed = (JsonArray) ((JsonObject) JsonService.parse(jsonString)).get("elements");
+		System.out.println("JsonService -> parse string -> get \"elements\" as json array and print");
+		if (parsed != null && parsed.type() == JsonElement.Types.JSON_ARRAY) {
+			System.out.println(parsed.toString());
+			for (JsonElement e: parsed.childs())
+				System.out.println(e.type().name() + " : " + e.value());
 		}
 	}
 }
